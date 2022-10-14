@@ -10,7 +10,7 @@
 #include <locale>
 #include <memory>
 
-std::wstring evName{ L"Hello, Windows desktop!" };
+std::wstring evNameAndValue{  };
 winrt::Windows::Foundation::Collections::IMapView<winrt::hstring, winrt::hstring> evs;
 LRESULT CALLBACK WindowsProc(
     _In_ HWND   hWnd,
@@ -19,52 +19,49 @@ LRESULT CALLBACK WindowsProc(
     _In_ LPARAM lParam
 )
 {
-    PAINTSTRUCT ps;
-    HDC hdc;
-    std::stringstream evMessage{};
-    std::string myMessageAsString{ evMessage.str() };
-    auto indexToBreakAt = rand() % evs.Size();
-    int currentIndex{};
-    std::unique_ptr<wchar_t> buffer;
-    int requiredCharacters{};
+    winrt::hstring messageToPrint{};
     switch (message)
     {
     case WM_PAINT:
+    {
+        PAINTSTRUCT ps;
+        HDC hdc;
         hdc = BeginPaint(hWnd, &ps);
-
-        // Here your application is laid out.
-        // For this introduction, we just print out "Hello, Windows desktop!"
-        // in the top left corner.
-        TextOut(hdc,
-            5, 5,
-            evName.c_str(), evName.size());
+        THROW_LAST_ERROR_IF(!TextOut(hdc, 5, 5, evNameAndValue.c_str(), evNameAndValue.size()));
         // End application specific layout section.
-
         EndPaint(hWnd, &ps);
+
+        evNameAndValue.clear();
         break;
+    }
     case WM_DESTROY:
         PostQuitMessage(0);
         break;
     case WM_COMMAND:
+    {
+        int indexToBreakAt = rand() % evs.Size();
+        int currentIndex{};
+
+        // Very bad way of picking an EV at random.  But IMapViews don't have index selecting.
         for (auto&& ev : evs)
         {
             if (currentIndex == indexToBreakAt)
             {
-                evMessage << winrt::to_string(ev.Key());
-                evMessage << " ";
-                evMessage << winrt::to_string(ev.Value());
+                messageToPrint = messageToPrint + ev.Key();
+                messageToPrint = messageToPrint + winrt::to_hstring(": ");
+                messageToPrint = messageToPrint + ev.Value();
                 break;
             }
             currentIndex++;
         }
 
-        requiredCharacters = MultiByteToWideChar(CP_UTF8, MB_PRECOMPOSED, myMessageAsString.c_str(), -1, nullptr, 0);
-        buffer.reset(new wchar_t[requiredCharacters + 1]);
-        requiredCharacters = MultiByteToWideChar(CP_UTF8, MB_PRECOMPOSED, myMessageAsString.c_str(), -1, buffer.get(), 0);
+        evNameAndValue = std::wstring(messageToPrint);
 
-        evName = buffer.release();
-
+        // Tell windows what part of the window to redraw be invalidating it.
+        RECT region{0, 0, 500, 30};
+        InvalidateRect(hWnd, &region, TRUE);
         break;
+    }
     default:
         return DefWindowProc(hWnd, message, wParam, lParam);
         break;
@@ -81,12 +78,12 @@ int WINAPI WinMain(
     _In_ int       nCmdShow
 )
 {
-    auto forProcess{winrt::Microsoft::Windows::System::EnvironmentManager::GetForProcess()};
+    auto forProcess{ winrt::Microsoft::Windows::System::EnvironmentManager::GetForProcess() };
     evs = { forProcess.GetEnvironmentVariables() };
     srand(time(NULL));
 
 
-    std::wstring windowsClassName{L"MyWindowsClass"};
+    std::wstring windowsClassName{ L"MyWindowsClass" };
     WNDCLASSEXW mainWindow;
     mainWindow.cbSize = sizeof(WNDCLASSEX);
     mainWindow.style = CS_HREDRAW | CS_VREDRAW;
@@ -108,7 +105,7 @@ int WINAPI WinMain(
     }
 
     std::wstring titleName{ L"TitleName" };
-    HWND windowsHandle{ CreateWindowEx(WS_EX_OVERLAPPEDWINDOW, windowsClassName.c_str(), titleName.c_str(), WS_OVERLAPPEDWINDOW, 800, 500, 500, 500, nullptr, nullptr, hInstance, nullptr) };
+    HWND windowsHandle{ CreateWindowEx(WS_EX_OVERLAPPEDWINDOW, windowsClassName.c_str(), titleName.c_str(), WS_OVERLAPPEDWINDOW, 800, 500, 800, 500, nullptr, nullptr, hInstance, nullptr) };
     THROW_LAST_ERROR_IF_NULL(windowsHandle);
 
 
@@ -117,9 +114,9 @@ int WINAPI WinMain(
         L"BUTTON",  // Predefined class; Unicode assumed 
         L"Find me a random EV",      // Button text 
         WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_DEFPUSHBUTTON,  // Styles 
-        150,         // x position 
+        50,         // x position 
         150,         // y position 
-        100,        // Button width
+        500,        // Button width
         100,        // Button height
         windowsHandle,     // Parent window
         NULL,       // No menu.
